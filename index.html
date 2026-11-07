@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Khám phá cấu trúc ti thể 3D</title>
+  <style>
+    :root {
+      --bg: #071323;
+      --panel: rgba(13, 30, 51, .90);
+      --panel-border: rgba(164, 205, 230, .18);
+      --text: #edf7ff;
+      --muted: #a9bfd0;
+      --accent: #70d8df;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: Inter, "Segoe UI", Arial, sans-serif; }
+    #scene { position: fixed; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; outline: none; }
+    .topbar {
+      position: fixed; z-index: 5; top: 18px; left: 20px; right: 20px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+      pointer-events: none;
+    }
+    .brand, .help, .info, .controls { pointer-events: auto; }
+    .brand { max-width: min(510px, 70vw); }
+    .eyebrow { color: #83dce2; font-size: 11px; letter-spacing: .20em; font-weight: 700; text-transform: uppercase; }
+    h1 { margin: 6px 0 5px; font-size: clamp(20px, 3vw, 32px); letter-spacing: .01em; font-weight: 750; }
+    .sub { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .help, .info, .controls {
+      background: var(--panel); border: 1px solid var(--panel-border); backdrop-filter: blur(14px);
+      box-shadow: 0 12px 38px rgba(0,0,0,.22); border-radius: 14px;
+    }
+    .help { padding: 12px 14px; max-width: 270px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .help strong { color: var(--text); }
+    .right-rail { position: fixed; z-index: 5; right: 20px; top: 50%; transform: translateY(-42%); width: min(290px, calc(100vw - 40px)); }
+    .info { padding: 17px 17px 16px; min-height: 150px; }
+    .info-kicker { color: #83dce2; font-size: 10px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+    #partName { margin: 8px 0 8px; font-size: 21px; line-height: 1.2; color: #fff; }
+    #partDesc { color: #c0d1df; font-size: 13px; line-height: 1.6; margin: 0; }
+    .hint { color: #9bb3c5; font-size: 12px; line-height: 1.55; }
+    .controls { display: flex; gap: 8px; padding: 9px; margin-top: 10px; }
+    button { border: 1px solid rgba(150,210,225,.22); border-radius: 9px; color: var(--text); background: rgba(67,115,143,.22); padding: 9px 11px; font-size: 12px; cursor: pointer; transition: .18s ease; }
+    button:hover { background: rgba(88,164,180,.34); border-color: rgba(112,216,223,.55); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .bottom-note { position: fixed; z-index: 4; bottom: 17px; left: 20px; color: rgba(202,222,235,.68); font-size: 11px; letter-spacing: .02em; pointer-events: none; }
+    .pill { display: inline-block; border: 1px solid rgba(112,216,223,.28); color: #a8edf0; border-radius: 20px; padding: 4px 8px; font-size: 10px; margin-top: 8px; }
+    #loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #071323; color: #dff7ff; font-size: 14px; }
+    #loading.hidden { display: none; }
+    @media (max-width: 760px) {
+      .topbar { top: 12px; left: 12px; right: 12px; }
+      .help { display: none; }
+      .right-rail { top: auto; bottom: 56px; right: 12px; transform: none; width: min(260px, calc(100vw - 24px)); }
+      .info { min-height: auto; padding: 12px; }
+      #partName { font-size: 18px; }
+      #partDesc { font-size: 12px; }
+      .bottom-note { left: 12px; bottom: 14px; max-width: 45vw; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.128.0/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="loading">Đang tải mô hình ti thể 3D…</div>
+  <div id="scene"></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="eyebrow">Sinh học · Mô hình tương tác 3D</div>
+      <h1>KHÁM PHÁ CẤU TRÚC TI THỂ</h1>
+      <div class="sub">Quan sát mô hình cắt bổ và khám phá từng thành phần trong không gian ba chiều.</div>
+    </div>
+    <div class="help">
+      <strong>Điều khiển mô hình</strong><br>
+      Kéo chuột trái: xoay mô hình<br>
+      Lăn con lăn: phóng to / thu nhỏ<br>
+      Nhấp vào cấu trúc: xem tên và mô tả<br>
+      Nhấp đúp: bỏ chọn cấu trúc
+    </div>
+  </header>
+  <aside class="right-rail">
+    <section class="info" aria-live="polite">
+      <div class="info-kicker">Thông tin cấu trúc</div>
+      <h2 id="partName">Chọn một cấu trúc</h2>
+      <p id="partDesc" class="hint">Nhấp trực tiếp vào một phần của mô hình để xem tên và chức năng của cấu trúc đó.</p>
+      <span class="pill" id="partTag">Mô hình ti thể 3D</span>
+    </section>
+    <div class="controls">
+      <button id="resetBtn" type="button">↺ Đặt lại góc nhìn</button>
+      <button id="spinBtn" type="button">▶ Tự xoay</button>
+      <button id="clearBtn" type="button">Bỏ chọn</button>
+    </div>
+  </aside>
+  <div class="bottom-note">Mô hình minh họa khoa học · Kéo chuột để khám phá 360°</div>
+
+<script>
+(function () {
+  const loading = document.getElementById('loading');
+  const host = document.getElementById('scene');
+  const nameEl = document.getElementById('partName');
+  const descEl = document.getElementById('partDesc');
+  const tagEl = document.getElementById('partTag');
+  const resetBtn = document.getElementById('resetBtn');
+  const spinBtn = document.getElementById('spinBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  if (!window.THREE || !THREE.OrbitControls) {
+    loading.textContent = 'Không tải được thư viện 3D. Hãy kiểm tra kết nối Internet rồi tải lại trang.';
+    return;
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x071323);
+  scene.fog = new THREE.Fog(0x071323, 12, 25);
+
+  const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+  const initialCamera = new THREE.Vector3(0.15, 2.35, 9.5);
+  camera.position.copy(initialCamera);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  host.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.065;
+  controls.enablePan = false;
+  controls.minDistance = 5.3;
+  controls.maxDistance = 15;
+  controls.maxPolarAngle = Math.PI * 0.88;
+  controls.update();
+
+  scene.add(new THREE.HemisphereLight(0xbcecff, 0x172039, 1.15));
+  const key = new THREE.DirectionalLight(0xffffff, 2.0);
+  key.position.set(4, 6, 7); scene.add(key);
+  const rim = new THREE.PointLight(0x4b8fff, 1.3, 20);
+  rim.position.set(-5, 1, -3); scene.add(rim);
+  const warm = new THREE.PointLight(0xff8d65, 0.75, 15);
+  warm.position.set(1, -3, 5); scene.add(warm);
+
+  const model = new THREE.Group();
+  model.rotation.y = -0.10;
+  scene.add(model);
+
+  const descriptions = {
+    outer: { name: 'Màng ngoài', desc: 'Lớp màng bao bọc bên ngoài, tạo ranh giới và bảo vệ toàn bộ ti thể. Màng ngoài tương đối trơn và có tính thấm chọn lọc.', tag: 'Lớp màng bao bọc' },
+    inner: { name: 'Màng trong', desc: 'Lớp màng nằm phía trong màng ngoài. Màng trong gấp nếp vào phía chất nền, tạo thành các mào ti thể và chứa nhiều protein tham gia tổng hợp ATP.', tag: 'Màng có nhiều nếp gấp' },
+    space: { name: 'Khoang gian màng', desc: 'Khoang nằm giữa màng ngoài và màng trong. Đây là nơi tích lũy proton trong quá trình vận chuyển electron ở ti thể.', tag: 'Khoang giữa hai màng' },
+    cristae: { name: 'Mào ti thể', desc: 'Các nếp gấp của màng trong, giúp tăng diện tích bề mặt để bố trí các protein của chuỗi chuyền electron và enzyme ATP synthase.', tag: 'Nếp gấp của màng trong' },
+    matrix: { name: 'Chất nền', desc: 'Khoang bên trong màng trong. Chất nền chứa enzyme, DNA ti thể, ribosome và nhiều phân tử tham gia các phản ứng chuyển hóa.', tag: 'Khoang bên trong' },
+    dna: { name: 'DNA ti thể', desc: 'Phân tử DNA của ti thể thường có dạng vòng, mang thông tin di truyền mã hóa một phần các thành phần cần thiết cho hoạt động của ti thể.', tag: 'Vật chất di truyền' },
+    ribosomes: { name: 'Ribosome', desc: 'Các hạt ribosome nằm trong chất nền, tham gia tổng hợp một số protein của ti thể.', tag: 'Bộ máy tổng hợp protein' },
+    granules: { name: 'Hạt dự trữ', desc: 'Các hạt nhỏ trong chất nền, có thể tích lũy một số chất và ion, góp phần duy trì cân bằng thành phần bên trong ti thể.', tag: 'Hạt trong chất nền' }
+  };
+
+  const clickable = [];
+  const partGroups = {};
+  const originalMaterials = new Map();
+
+  function makeMaterial(color, opacity, extra = {}) {
+    return new THREE.MeshStandardMaterial({
+      color, roughness: 0.36, metalness: 0.08,
+      transparent: opacity < 1, opacity,
+      side: THREE.DoubleSide, depthWrite: opacity >= 0.92,
+      ...extra
+    });
+  }
+  function makePart(key, label) {
+    const group = new THREE.Group();
+    group.name = label;
+    group.userData.partKey = key;
+    model.add(group);
+    partGroups[key] = group;
+    return group;
+  }
+  function addMesh(group, geometry, material, key, name) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name || key;
+    mesh.userData.partKey = key;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    clickable.push(mesh);
+    originalMaterials.set(mesh, material);
+    return mesh;
+  }
+  function halfEllipsoid(group, key, label, scale, material, phiStart = Math.PI, phiLength = Math.PI) {
+    const geometry = new THREE.SphereGeometry(1, 84, 52, phiStart, phiLength, 0, Math.PI);
+    const mesh = addMesh(group, geometry, material, key, label);
+    mesh.scale.set(scale[0], scale[1], scale[2]);
+    return mesh;
+  }
+  function addEllipseRim(group, key, label, rx, ry, z, color, radius) {
+    const pts = [];
+    for (let i = 0; i <= 160; i++) {
+      const a = (i / 160) * Math.PI * 2;
+      pts.push(new THREE.Vector3(rx * Math.cos(a), ry * Math.sin(a), z));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts, true);
+    const geo = new THREE.TubeGeometry(curve, 160, radius, 10, true);
+    return addMesh(group, geo, new THREE.MeshStandardMaterial({ color, roughness: .28, metalness: .12, emissive: color, emissiveIntensity: .12 }), key, label);
+  }
+
+  // Outer membrane: rear half-shell leaves the front open as a scientific cutaway.
+  const outerGroup = makePart('outer', 'Màng ngoài');
+  halfEllipsoid(outerGroup, 'outer', 'Màng ngoài', [4.05, 1.48, 1.30], makeMaterial(0x6858a8, .42));
+  addEllipseRim(outerGroup, 'outer', 'Viền màng ngoài', 4.05, 1.48, 0, 0x8878d0, .075);
+
+  // Intermembrane space: translucent shell located between the two membranes.
+  const spaceGroup = makePart('space', 'Khoang gian màng');
+  halfEllipsoid(spaceGroup, 'space', 'Khoang gian màng', [3.84, 1.31, 1.14], makeMaterial(0x82b8e6, .20));
+
+  // Inner membrane and its cutaway rim.
+  const innerGroup = makePart('inner', 'Màng trong');
+  halfEllipsoid(innerGroup, 'inner', 'Màng trong', [3.63, 1.16, .99], makeMaterial(0xf07855, .50));
+  addEllipseRim(innerGroup, 'inner', 'Viền màng trong', 3.63, 1.16, 0, 0xff9a69, .065);
+
+  // Matrix: a translucent rear volume so internal structures remain visible.
+  const matrixGroup = makePart('matrix', 'Chất nền');
+  halfEllipsoid(matrixGroup, 'matrix', 'Chất nền', [3.52, 1.06, .88], makeMaterial(0x34bcc4, .18));
+
+  // Cristae: individual curved folds projecting into the matrix.
+  const cristaeGroup = makePart('cristae', 'Mào ti thể');
+  const cristaMat = new THREE.MeshStandardMaterial({ color: 0xf26e4b, roughness: .31, metalness: .08, emissive: 0x662313, emissiveIntensity: .30 });
+  for (let i = 0; i < 11; i++) {
+    const x = -2.75 + i * .55;
+    const points = [
+      new THREE.Vector3(x, -.58, -.20),
+      new THREE.Vector3(x - .16, -.18, .17),
+      new THREE.Vector3(x - .08, .35, .24),
+      new THREE.Vector3(x + .10, .58, -.02),
+      new THREE.Vector3(x + .20, .13, -.28),
+      new THREE.Vector3(x + .08, -.42, -.23)
+    ];
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+    const tube = new THREE.TubeGeometry(curve, 48, .075, 10, false);
+    addMesh(cristaeGroup, tube, cristaMat.clone(), 'cristae', 'Mào ti thể ' + (i + 1));
+  }
+
+  // Mitochondrial DNA: circular, double-stranded representation.
+  const dnaGroup = makePart('dna', 'DNA ti thể');
+  const dna1 = new THREE.Mesh(new THREE.TorusGeometry(.39, .035, 10, 96), new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: .28, emissive: 0x5c3b08, emissiveIntensity: .32 }));
+  dna1.position.set(-.25, .10, .34); dna1.rotation.set(.65, .18, .30); dna1.userData.partKey = 'dna'; dna1.name = 'DNA ti thể – mạch 1'; dnaGroup.add(dna1); clickable.push(dna1); originalMaterials.set(dna1, dna1.material);
+  const dna2 = new THREE.Mesh(new THREE.TorusGeometry(.34, .028, 10, 96), new THREE.MeshStandardMaterial({ color: 0x8de3e5, roughness: .3, emissive: 0x15515c, emissiveIntensity: .28 }));
+  dna2.position.set(-.22, .10, .34); dna2.rotation.set(.70, .24, .34); dna2.userData.partKey = 'dna'; dna2.name = 'DNA ti thể – mạch 2'; dnaGroup.add(dna2); clickable.push(dna2); originalMaterials.set(dna2, dna2.material);
+
+  // Ribosomes: many small granules in the matrix.
+  const riboGroup = makePart('ribosomes', 'Ribosome');
+  const riboMat = new THREE.MeshStandardMaterial({ color: 0x79e1b1, roughness: .42, metalness: .02, emissive: 0x174e3b, emissiveIntensity: .22 });
+  const riboPositions = [
+    [-2.35,.20,.26],[-1.95,-.36,.40],[-1.55,.58,.18],[-1.15,-.55,.28],[-.88,.48,.58],[-.48,-.48,.54],[-.05,.70,.18],[.35,-.58,.32],[.72,.48,.50],[1.10,-.26,.59],[1.48,.60,.10],[1.78,-.50,.24],[2.25,.24,.18],[2.65,-.16,.30],[-2.65,-.26,-.20],[.98,.10,-.42],[-.95,.05,-.50],[2.1,.30,-.32]
+  ];
+  riboPositions.forEach((p, i) => {
+    const s = .065 + (i % 3) * .008;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(s, 16, 12), riboMat.clone());
+    mesh.position.set(p[0], p[1], p[2]); mesh.userData.partKey = 'ribosomes'; mesh.name = 'Ribosome ' + (i + 1);
+    riboGroup.add(mesh); clickable.push(mesh); originalMaterials.set(mesh, mesh.material);
+  });
+
+  // Storage granules: larger spherical particles.
+  const granuleGroup = makePart('granules', 'Hạt dự trữ');
+  const granuleMat = new THREE.MeshStandardMaterial({ color: 0xb8a4ed, roughness: .32, metalness: .08, emissive: 0x30205c, emissiveIntensity: .28 });
+  const granulePositions = [[-2.0,.48,-.05],[-1.0,-.14,.03],[.30,.48,-.08],[1.45,-.42,-.04],[2.45,.48,-.10],[.75,-.78,-.10]];
+  granulePositions.forEach((p, i) => {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(.105 + (i%2)*.025, 20, 16), granuleMat.clone());
+    mesh.position.set(p[0], p[1], p[2]); mesh.userData.partKey = 'granules'; mesh.name = 'Hạt dự trữ ' + (i + 1);
+    granuleGroup.add(mesh); clickable.push(mesh); originalMaterials.set(mesh, mesh.material);
+  });
+
+  // Small, subtle floor grid and floating particles for depth.
+  const floor = new THREE.GridHelper(24, 32, 0x1b4762, 0x102c43);
+  floor.position.y = -2.1; floor.material.transparent = true; floor.material.opacity = .20; scene.add(floor);
+  const particleGeo = new THREE.BufferGeometry();
+  const particleCount = 350;
+  const particlePositions = new Float32Array(particleCount * 3);
+  let seed = 2026;
+  function rand() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+  for (let i = 0; i < particleCount; i++) {
+    particlePositions[i*3] = (rand() - .5) * 24;
+    particlePositions[i*3+1] = (rand() - .5) * 12;
+    particlePositions[i*3+2] = (rand() - .5) * 18 - 3;
+  }
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+  const particles = new THREE.Points(particleGeo, new THREE.PointsMaterial({ color: 0x4a849f, size: .018, transparent: true, opacity: .40 }));
+  scene.add(particles);
+
+  let selectedKey = null;
+  let autoRotate = false;
+  let pointerDown = null;
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+
+  function clearSelection() {
+    if (selectedKey && partGroups[selectedKey]) {
+      partGroups[selectedKey].traverse(obj => {
+        if (obj.isMesh && originalMaterials.has(obj)) obj.material = originalMaterials.get(obj);
+      });
+    }
+    selectedKey = null;
+    nameEl.textContent = 'Chọn một cấu trúc';
+    descEl.textContent = 'Nhấp trực tiếp vào một phần của mô hình để xem tên và chức năng của cấu trúc đó.';
+    descEl.className = 'hint';
+    tagEl.textContent = 'Mô hình ti thể 3D';
+  }
+
+  function selectPart(key) {
+    if (!descriptions[key]) return;
+    if (selectedKey === key) { clearSelection(); return; }
+    clearSelection();
+    selectedKey = key;
+    const info = descriptions[key];
+    nameEl.textContent = info.name;
+    descEl.textContent = info.desc;
+    descEl.className = '';
+    tagEl.textContent = info.tag;
+    const group = partGroups[key];
+    if (group) {
+      group.traverse(obj => {
+        if (!obj.isMesh || !obj.material) return;
+        const base = originalMaterials.get(obj);
+        if (!base) return;
+        const glow = base.clone();
+        if (glow.emissive) { glow.emissive = new THREE.Color(0x5bdde5); glow.emissiveIntensity = .75; }
+        if (glow.color) glow.color.lerp(new THREE.Color(0xb4ffff), .28);
+        obj.material = glow;
+      });
+    }
+  }
+
+  renderer.domElement.addEventListener('pointerdown', e => { pointerDown = { x: e.clientX, y: e.clientY }; });
+  renderer.domElement.addEventListener('pointerup', e => {
+    if (!pointerDown) return;
+    const distance = Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y);
+    pointerDown = null;
+    if (distance > 6) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(clickable, false);
+    if (hits.length) {
+      // Select the nearest selectable object. Membranes are modeled as rear half-shells,
+      // leaving the cutaway opening accessible to clicks on internal components.
+      const key = hits[0].object.userData.partKey;
+      if (key) selectPart(key);
+    }
+  });
+  renderer.domElement.addEventListener('dblclick', clearSelection);
+
+  resetBtn.addEventListener('click', () => {
+    camera.position.copy(initialCamera);
+    controls.target.set(0, 0, 0);
+    controls.update();
+    clearSelection();
+  });
+  spinBtn.addEventListener('click', () => {
+    autoRotate = !autoRotate;
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 1.25;
+    spinBtn.textContent = autoRotate ? 'Ⅱ Dừng xoay' : '▶ Tự xoay';
+  });
+  clearBtn.addEventListener('click', clearSelection);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  });
+
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    controls.update();
+    if (autoRotate) model.rotation.y += dt * .10;
+    particles.rotation.y += dt * .003;
+    renderer.render(scene, camera);
+  }
+  animate();
+  loading.classList.add('hidden');
+})();
+</script>
+</body>
+</html>
